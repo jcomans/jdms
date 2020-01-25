@@ -73,6 +73,15 @@ def build_images():
 def remove_images():
     run_process(['docker', 'rmi', 'local:jdms-dev', 'local:jdms-base'])
 
+def map_folder(local, container):
+    return ['-v', '{}:{}'.format(local, container)]
+
+def map_port(local, container):
+    return ['-p', '{}:{}'.format(local, container)]
+
+def set_env_var(key, value):
+    return ['-e', '{}={}'.format(key, value)]
+
 def start_container(command):
     current_script_path = os.path.realpath(__file__)
     root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_script_path))))
@@ -80,16 +89,26 @@ def start_container(command):
     emacs_d_dir = os.path.join(root_dir, 'jdms', 'tools', 'resources', 'emacs.d')
     ssh_dir = os.path.join(str(pathlib.Path.home()), '.ssh')
 
-    run_with_x(['docker', 'container', 'run',
-                '-v', '{}:/project'.format(root_dir),
-                '-v', '{}:/root/.emacs.d'.format(emacs_d_dir),
-                '-v', '{}:/tmp/.ssh'.format(ssh_dir),
-                '-e', 'DISPLAY={}:0'.format(get_ip()),
-                '-e', 'TERM=bash',
-                '-it',
-                '--rm',
-                '--name', 'dev-test',
-                'local:jdms-dev',] + command)
+    args  = ['docker', 'container', 'run']
+    args += map_folder(root_dir, '/project')
+    args += map_folder(emacs_d_dir, '/root/.emacs.d')
+    args += map_folder(ssh_dir, '/tmp/.ssh')
+
+    args += map_port('8080', '8080')
+
+    args += set_env_var('TERM', 'bash')
+
+    if os.name == 'nt':
+        args += set_env_var('DISPLAY', get_ip())
+    else:
+        args += map_folder('/tmp/.X11-unix', '/tmp/.X11-unix')
+        args += set_env_var('DISPLAY', os.environ['DISPLAY'])
+
+    args += ['-it', '--rm', '--name', 'dev-test', 'local:jdms-dev']
+
+    args += command
+    
+    run_with_x(args)
 
 def main(argv):
 
